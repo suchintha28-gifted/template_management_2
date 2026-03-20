@@ -151,6 +151,11 @@
       }
     };
 
+    /* Mock global template store to track which non-English templates exist */
+    const GLOBAL_TEMPLATE_STORE = {
+      // Example: 'Self|Email|DIGITAL_PDF|Email body|No|Swedish': true means this non-English template exists
+    };
+
     /* ═══════════════════════════════════════════════════════════════════════════
        UTILITY FUNCTIONS
        ═══════════════════════════════════════════════════════════════════════════ */
@@ -466,7 +471,7 @@ RULES:
     };
 
     /* ─── Sample Data Banner ──────────────────────────────────────────────────── */
-    const SampleDataBanner = ({ onCopy }) => {
+    const SampleDataBanner = ({ onCopy, currentTab }) => {
       const [copied, setCopied] = useState(null);
       
       const scenarios = [
@@ -482,6 +487,18 @@ RULES:
         onCopy(uuid);
         setTimeout(() => setCopied(null), 2000);
       };
+
+      // Only show on config tab
+      if (currentTab !== 'config') {
+        return (
+          <div style={{background:'#f0f7ff',borderBottom:'1px solid #b3d9ff',padding:'10px 26px',display:'flex',alignItems:'center',gap:'12px'}}>
+            <div style={{display:'flex',alignItems:'center',gap:'6px',fontSize:'13px',fontWeight:'600',color:'#1565c0'}}>
+              <span>💡</span>
+              <span>Global templates work across all configurations. Switch to "Configuration specific templates" to test with sample UUIDs.</span>
+            </div>
+          </div>
+        );
+      }
 
       return (
         <div style={{background:'#f0f7ff',borderBottom:'1px solid #b3d9ff',padding:'10px 26px',display:'flex',alignItems:'center',gap:'12px',flexWrap:'wrap'}}>
@@ -885,7 +902,7 @@ RULES:
       const phsKey = isGlobal ? '__g_savedPHs__'+defaultKey : '__savedPHs__'+defaultKey;
       const changeKey = isGlobal ? '__g_phsChanged__' : '__phsChanged__';
 
-      const init = store[realKey] ?? (isFirstPage(msg)?'':buildDefault(buy,msg,cum));
+      const init = store[realKey] ?? (isFirstPage(msg)?'':buildDefault(buy,msg,cum==='-'?'':cum));
       const [content,setContent]=useState(init);
       const [lastSaved,setLastSaved]=useState(init);
       const savedDefaultPHs = useRef(
@@ -946,6 +963,13 @@ RULES:
             onStoreUpdate(phsKey,JSON.stringify(savedDefaultPHs.current));
             onStoreUpdate(changeKey,'');
           }
+          
+          // For global non-English templates, mark as created
+          if(isGlobal && locale !== GLOBAL_DEFAULT_LOCALE) {
+            const fullKey = makeKey(buy,mode,msg,msg,cum,locale);
+            GLOBAL_TEMPLATE_STORE[fullKey] = true;
+          }
+          
           setTimeout(()=>{setSaveStatus('');setSaveMsg('');},5000);
         } else {
           setSaveStatus('error');
@@ -955,7 +979,14 @@ RULES:
       };
 
       const handleApplyTranslations = applied => {
-        Object.entries(applied).forEach(([loc,html])=>onStoreUpdate(makeKey(buy,mode,msg,msg,cum,loc),html));
+        Object.entries(applied).forEach(([loc,html])=>{
+          const k = makeKey(buy,mode,msg,msg,cum,loc);
+          onStoreUpdate(k,html);
+          // Mark global non-English templates as created when translations are applied
+          if(isGlobal && loc !== GLOBAL_DEFAULT_LOCALE) {
+            GLOBAL_TEMPLATE_STORE[k] = true;
+          }
+        });
         savedDefaultPHs.current=extractPlaceholders(store[defaultKey]||content);
         onStoreUpdate(changeKey,'');
         setShowTranslateModal(false);
@@ -991,11 +1022,18 @@ RULES:
               details={`This is not the default language (${defLoc}). Placeholder insertion is disabled here to maintain consistency. Use the Re-Translate button to regenerate from ${defLoc}, or edit manually ensuring all ${defLoc} placeholders remain present.`}
             />
           )}
-          {showHint && isGlobal && (
+          {showHint && isGlobal && locale === GLOBAL_DEFAULT_LOCALE && (
             <SmartHint 
               type="backend" 
-              message="Global Template Mode - Propagates to All Configurations"
-              details="Backend: Atomic write operation. When you save, this template is written to the DEFAULT folder in ALL UUID folders simultaneously. If any UUID write fails, the entire operation rolls back. Placeholder validation shows warnings but doesn't block save to avoid circular dependency (English can't save until other locales update, but other locales can't update until English saves)."
+              message="Global English Template - Always Exists"
+              details="Backend: English global templates always exist. When you save, this template is written to the DEFAULT folder in ALL UUID folders simultaneously. If any UUID write fails, the entire operation rolls back. This template serves as the source for creating non-English global templates."
+            />
+          )}
+          {showHint && isGlobal && locale !== GLOBAL_DEFAULT_LOCALE && (
+            <SmartHint 
+              type="backend" 
+              message="Global Non-English Template - Created from English"
+              details="Backend: Non-English global templates are created by duplicating from English. When you save, this template is written to the DEFAULT folder in ALL UUID folders simultaneously. If any UUID write fails, the entire operation rolls back. Placeholder validation shows warnings but doesn't block save to avoid circular dependency."
             />
           )}
           
@@ -1092,8 +1130,19 @@ RULES:
       const phs=getPHs(buy,msg,resolvedCum==='-'?'':resolvedCum);
 
       const templateKey = makeKey(buy,dm,dv,msg,resolvedCum);
+      const fullTemplateKey = makeKey(buy,dm,dv,msg,resolvedCum,locale);
       const templateExists = !isGlobal && configData && configData.customTemplates[templateKey];
-      const buttonText = templateExists ? 'SEARCH' : (isGlobal ? 'SEARCH' : 'CREATE TEMPLATE');
+      
+      // For global templates: English always exists, non-English may need to be created
+      const isGlobalEnglish = isGlobal && locale === GLOBAL_DEFAULT_LOCALE;
+      const isGlobalNonEnglish = isGlobal && locale !== GLOBAL_DEFAULT_LOCALE;
+      const globalNonEnglishExists = isGlobalNonEnglish && GLOBAL_TEMPLATE_STORE[fullTemplateKey];
+      
+      const buttonText = templateExists ? 'SEARCH' : 
+                         isGlobalEnglish ? 'SEARCH' :
+                         (isGlobalNonEnglish && !globalNonEnglishExists) ? 'CREATE TEMPLATE' :
+                         (isGlobalNonEnglish && globalNonEnglishExists) ? 'SEARCH' :
+                         'CREATE TEMPLATE';
 
       const getAvailableBuyingOptions = () => isGlobal || !configData ? ['Self','Gifting'] : (configData.available.buyingOptions || []);
       const getAvailableDeliveryModes = () => isGlobal || !configData ? deliveryModes(buy) : (!buy || !configData.available.deliveryModes[buy] ? [] : configData.available.deliveryModes[buy]);
@@ -1119,6 +1168,15 @@ RULES:
         
         if (!isGlobal && !templateExists && configData) {
           configData.customTemplates[templateKey] = true;
+        }
+        
+        // For global non-English templates being created, copy from English
+        if (isGlobalNonEnglish && !globalNonEnglishExists) {
+          const englishKey = makeKey(buy,dm,dv,msg,resolvedCum,GLOBAL_DEFAULT_LOCALE);
+          const englishContent = store.current[englishKey] || buildDefault(buy,msg,resolvedCum==='-'?'':resolvedCum);
+          if (!isFirstPage(msg)) {
+            store.current[realKey] = englishContent;
+          }
         }
         
         if(!store.current[realKey] && !isFirstPage(msg)) {
@@ -1164,11 +1222,26 @@ RULES:
 
             {allChosen && !showEditor && (
               <SmartHint 
-                type={templateExists ? "info" : "backend"}
-                message={templateExists ? "Template exists - Click SEARCH to load it" : "No custom template exists - Click CREATE TEMPLATE"}
-                details={templateExists 
-                  ? "Backend: Reads from CUSTOM folder for this UUID. If not found, falls back to DEFAULT folder (global), then to English as starting point."
-                  : "Backend: Will create a new CUSTOM folder entry for this UUID. The global template (DEFAULT folder) will be loaded as your starting point. After you save, subsequent searches will show SEARCH instead of CREATE TEMPLATE."}
+                type={
+                  isGlobalEnglish ? "backend" :
+                  (isGlobalNonEnglish && !globalNonEnglishExists) ? "backend" :
+                  (isGlobalNonEnglish && globalNonEnglishExists) ? "info" :
+                  templateExists ? "info" : "backend"
+                }
+                message={
+                  isGlobalEnglish ? "English global template always exists - Click SEARCH to load it" :
+                  (isGlobalNonEnglish && !globalNonEnglishExists) ? "No global template exists for this locale - Click CREATE TEMPLATE" :
+                  (isGlobalNonEnglish && globalNonEnglishExists) ? "Global template exists for this locale - Click SEARCH to load it" :
+                  templateExists ? "Template exists - Click SEARCH to load it" : "No custom template exists - Click CREATE TEMPLATE"
+                }
+                details={
+                  isGlobalEnglish ? "Backend: English global templates are always available and serve as the base for all configurations. When you save, this template is written to the DEFAULT folder in ALL UUID folders simultaneously." :
+                  (isGlobalNonEnglish && !globalNonEnglishExists) ? `Backend: This ${locale} global template will be created by duplicating from English. After creation, it will be written to the DEFAULT folder in ALL UUID folders simultaneously when saved.` :
+                  (isGlobalNonEnglish && globalNonEnglishExists) ? `Backend: This ${locale} global template already exists. It will be loaded from the DEFAULT folder. Changes will be written to ALL UUID folders simultaneously when saved.` :
+                  templateExists 
+                    ? "Backend: Reads from CUSTOM folder for this UUID. If not found, falls back to DEFAULT folder (global), then to English as starting point."
+                    : "Backend: Will create a new CUSTOM folder entry for this UUID. The global template (DEFAULT folder) will be loaded as your starting point. After you save, subsequent searches will show SEARCH instead of CREATE TEMPLATE."
+                }
               />
             )}
 
@@ -1202,13 +1275,25 @@ RULES:
     /* ═══════════════════════════════════════════════════════════════════════════
        CONFIG TAB
        ═══════════════════════════════════════════════════════════════════════════ */
-    const ConfigTab = () => {
+    const ConfigTab = ({ copiedUUID }) => {
       const [ref,setRef]=useState('');
       const [searching,setSearching]=useState(false);
       const [configFound,setConfigFound]=useState(false);
       const [defaultLocale,setDefaultLocale]=useState('English');
       const [searchErr,setSearchErr]=useState('');
       const [configData,setConfigData]=useState(null);
+
+      // Auto-fill and search when UUID is copied
+      useEffect(() => {
+        if (copiedUUID) {
+          setRef(copiedUUID);
+          // Trigger search automatically
+          setTimeout(() => {
+            const searchBtn = document.querySelector('[data-search-btn]');
+            if (searchBtn) searchBtn.click();
+          }, 100);
+        }
+      }, [copiedUUID]);
 
       const handleSearch=async()=>{
         if(!ref.trim()){setSearchErr('Please enter a sales configuration reference.');return;}
@@ -1240,7 +1325,7 @@ RULES:
                 <input type="text" value={ref} onChange={e=>{setRef(e.target.value);setConfigFound(false);setSearchErr('');setConfigData(null);}}
                   placeholder="Enter sales config UUID" disabled={searching}
                   style={{flex:1,padding:'8px 12px',border:'1px solid #d0d0d0',borderRadius:'4px',fontSize:'14px',backgroundColor:searching?'#f5f5f5':'white'}}/>
-                <button onClick={handleSearch} disabled={!ref.trim()||searching} style={btnP(!ref.trim()||searching)}>
+                <button onClick={handleSearch} disabled={!ref.trim()||searching} style={btnP(!ref.trim()||searching)} data-search-btn>
                   {searching?'SEARCHING...':'SEARCH'}
                 </button>
                 <button onClick={()=>{setRef('');setConfigFound(false);setSearchErr('');setConfigData(null);}} style={btnS}>RESET</button>
@@ -1279,11 +1364,15 @@ RULES:
       const [tab,setTab]=useState('global');
       const [showWelcome,setShowWelcome]=useState(true);
       const [showHelp,setShowHelp]=useState(false);
+      const [copiedUUID, setCopiedUUID] = useState(null);
 
       const handleUUIDCopy = (uuid) => {
         if(tab !== 'config') {
           setTab('config');
         }
+        setCopiedUUID(uuid);
+        // Clear after a moment to allow re-copying same UUID
+        setTimeout(() => setCopiedUUID(null), 1000);
       };
 
       return (
@@ -1316,7 +1405,7 @@ RULES:
               </button>
             </div>
             
-            <SampleDataBanner onCopy={handleUUIDCopy} />
+            <SampleDataBanner onCopy={handleUUIDCopy} currentTab={tab} />
             
             <div style={{backgroundColor:'white',borderBottom:'1px solid #e0e0e0',padding:'0 26px',flexShrink:0}}>
               <div style={{display:'flex',gap:'28px'}}>
@@ -1335,12 +1424,12 @@ RULES:
                   <SmartHint 
                     type="info" 
                     message="Global Templates - Default Fallback for All Configurations"
-                    details="Global templates are the default fallback used when a configuration doesn't have a custom template. Changes here affect ALL sales configurations simultaneously unless overridden by config-specific templates. English is always the default language for global templates."
+                    details="Global templates are the default fallback used when a configuration doesn't have a custom template. Changes here affect ALL sales configurations simultaneously unless overridden by config-specific templates. English is always the default language for global templates and always exists. Non-English global templates can be created by duplicating from English."
                   />
                   <CriteriaForm isGlobal={true} disabled={false} defaultLocale="English" configData={null} key="global"/>
                 </>
               )}
-              {tab==='config' && <ConfigTab key="config"/>}
+              {tab==='config' && <ConfigTab copiedUUID={copiedUUID} key="config"/>}
             </div>
           </div>
         </div>
