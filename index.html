@@ -78,8 +78,8 @@
         name: 'Swedish Gift Card Program',
         available: {
           buyingOptions: ['Self', 'Gifting'],
-          deliveryModes: { Self: ['Email', 'SMS'], Gifting: ['Email', 'SMS', 'Postcard'] },
-          deliverables: { Email: ['DIGITAL_PDF', 'EXCEL'], SMS: ['PLAIN_TEXT'], Postcard: ['PRINTED_PDF'] }
+          deliveryModes: { Self: ['Email', 'SMS'], Gifting: ['Email', 'SMS'] },
+          deliverables: { Email: ['DIGITAL_PDF', 'EXCEL'], SMS: ['PLAIN_TEXT'] }
         },
         customTemplates: {
           'Self|Email|DIGITAL_PDF|Email body|No': true,
@@ -92,15 +92,13 @@
         name: 'Full Featured Program',
         available: {
           buyingOptions: ['Self', 'Gifting'],
-          deliveryModes: { Self: ['Email', 'SMS', 'Instant Download'], Gifting: ['Email', 'SMS', 'Postcard', 'Instant Download'] },
-          deliverables: { Email: ['DIGITAL_PDF', 'EXCEL', 'PLAIN_TEXT'], SMS: ['PLAIN_TEXT'], Postcard: ['PRINTED_PDF'], 'Instant Download': ['DIGITAL_PDF_ZIP'] }
+          deliveryModes: { Self: ['Email', 'SMS'], Gifting: ['Email', 'SMS'] },
+          deliverables: { Email: ['DIGITAL_PDF', 'EXCEL', 'PLAIN_TEXT'], SMS: ['PLAIN_TEXT'] }
         },
         customTemplates: {
           'Self|Email|DIGITAL_PDF|Email body|No': true,
           'Self|Email|DIGITAL_PDF|Email subject|-': true,
-          'Self|Email|DIGITAL_PDF|Email signature|-': true,
-          'Self|Email|DIGITAL_PDF|PDF first page|-': true,
-          'Gifting|Postcard|PRINTED_PDF|Postcard first page|-': true,
+          'Gifting|Email|PLAIN_TEXT|Email body|Yes': true,
         }
       },
       'happy-path-uuid-1234-5678-9012-345678901234': {
@@ -108,8 +106,8 @@
         name: 'Happy Path Complete Configuration',
         available: {
           buyingOptions: ['Self', 'Gifting'],
-          deliveryModes: { Self: ['Email', 'SMS', 'Instant Download'], Gifting: ['Email', 'SMS', 'Postcard', 'Instant Download'] },
-          deliverables: { Email: ['DIGITAL_PDF', 'EXCEL', 'PLAIN_TEXT'], SMS: ['PLAIN_TEXT'], Postcard: ['PRINTED_PDF'], 'Instant Download': ['DIGITAL_PDF_ZIP'] }
+          deliveryModes: { Self: ['Email', 'SMS'], Gifting: ['Email', 'SMS'] },
+          deliverables: { Email: ['DIGITAL_PDF', 'EXCEL', 'PLAIN_TEXT'], SMS: ['PLAIN_TEXT'] }
         },
         customTemplates: {}
       },
@@ -123,26 +121,13 @@
         },
         customTemplates: {}
       },
-      'limited-config-aaaa-bbbb-cccc-dddddddddddd': {
-        defaultLocale: 'English',
-        name: 'Gifting-Only Postcard Configuration',
-        available: {
-          buyingOptions: ['Gifting'],
-          deliveryModes: { Gifting: ['Email', 'Postcard'] },
-          deliverables: { Email: ['DIGITAL_PDF', 'EXCEL'], Postcard: ['PRINTED_PDF'] }
-        },
-        customTemplates: {
-          'Gifting|Postcard|PRINTED_PDF|Postcard first page|-': true,
-          'Gifting|Email|DIGITAL_PDF|Email body|Yes': true,
-        }
-      },
       'translation-test-1111-2222-3333-444444444444': {
         defaultLocale: 'Danish',
         name: 'Danish Default Locale Configuration',
         available: {
           buyingOptions: ['Self', 'Gifting'],
-          deliveryModes: { Self: ['Email', 'SMS'], Gifting: ['Email', 'SMS', 'Postcard'] },
-          deliverables: { Email: ['DIGITAL_PDF', 'EXCEL'], SMS: ['PLAIN_TEXT'], Postcard: ['PRINTED_PDF'] }
+          deliveryModes: { Self: ['Email', 'SMS'], Gifting: ['Email', 'SMS'] },
+          deliverables: { Email: ['DIGITAL_PDF', 'EXCEL'], SMS: ['PLAIN_TEXT'] }
         },
         customTemplates: {
           'Self|Email|DIGITAL_PDF|Email body|No': true,
@@ -152,9 +137,7 @@
     };
 
     /* Mock global template store to track which non-English templates exist */
-    const GLOBAL_TEMPLATE_STORE = {
-      // Example: 'Self|Email|DIGITAL_PDF|Email body|No|Swedish': true means this non-English template exists
-    };
+    const GLOBAL_TEMPLATE_STORE = {};
 
     /* ═══════════════════════════════════════════════════════════════════════════
        UTILITY FUNCTIONS
@@ -192,31 +175,27 @@ RULES:
       return (d?.content?.find(b=>b.type==='text')?.text||'').trim();
     };
 
-    const deliveryModes = b => !b?[]:b==='Self'?['SMS','Email','Instant Download']:['SMS','Email','Postcard','Instant Download'];
-    const deliverables  = m => ({SMS:['PLAIN_TEXT'],Email:['DIGITAL_PDF','EXCEL','PLAIN_TEXT'],Postcard:['PRINTED_PDF'],'Instant Download':['DIGITAL_PDF_ZIP']}[m]||[]);
+    const deliveryModes = b => !b?[]:b==='Self'?['SMS','Email']:['SMS','Email'];
+    const deliverables  = m => ({SMS:['PLAIN_TEXT'],Email:['DIGITAL_PDF','EXCEL','PLAIN_TEXT']}[m]||[]);
     const msgElements   = (dv,m) => {
       if(!dv) return [];
       if(dv==='PLAIN_TEXT'&&m==='SMS') return ['SMS body'];
-      if(dv==='DIGITAL_PDF') return ['PDF first page','Email subject','Email body','Email signature'];
-      if(dv==='EXCEL'||(dv==='PLAIN_TEXT'&&m==='Email')) return ['Email subject','Email body','Email signature'];
-      if(dv==='PRINTED_PDF') return ['Postcard first page'];
-      if(dv==='DIGITAL_PDF_ZIP') return ['PDF first page'];
+      if(dv==='DIGITAL_PDF') return ['Email subject','Email body'];
+      if(dv==='EXCEL'||dv==='PLAIN_TEXT') return ['Email subject','Email body'];
       return [];
     };
     const cumConfig = (msg,mode) => {
       if(!msg) return null;
       if((msg==='SMS body'&&mode==='SMS')||msg==='Email body') return ['Yes','No'];
-      if(['PDF first page','Postcard first page','Email subject','Email signature'].includes(msg)) return 'dash';
+      if(['Email subject'].includes(msg)) return 'dash';
       return null;
     };
     const getPHs = (buy,msg,cum) => {
-      if(['PDF first page','Postcard first page','Email signature'].includes(msg)) return [];
       const base=[{name:'Recipient name',value:'${recipientName}'},{name:'Card program',value:'${brandName}'},{name:'Card link',value:'${cardLink}'}];
       if(buy==='Gifting') base.splice(1,0,{name:'Sender name',value:'${senderName}'});
       if(cum==='Yes') base.push({name:'Custom text',value:'${customText}'});
       return base;
     };
-    const isFirstPage = msg=>['PDF first page','Postcard first page'].includes(msg);
     const buildDefault = (buy,msg,cum) => {
       const s=buy==='Self';
       if(msg==='Email subject') return s?'Your ${brandName} Gift Card':'Your ${brandName} Gift Card from ${senderName}';
@@ -224,7 +203,6 @@ RULES:
         if(cum==='Yes') return s?'Hi ${recipientName},\n\n${customText}\n\nYour ${brandName} gift card is ready. Redeem:\n${cardLink}\n\nEnjoy!':'Hi ${recipientName},\n\n${senderName} sent you a gift card!\n\n${customText}\n\nYour ${brandName} gift card is ready:\n${cardLink}\n\nEnjoy!';
         return s?'Hi ${recipientName},\n\nYour ${brandName} gift card is ready. Redeem:\n${cardLink}\n\nEnjoy!':'Hi ${recipientName},\n\n${senderName} sent you a ${brandName} gift card!\n\nRedeem:\n${cardLink}\n\nEnjoy!';
       }
-      if(msg==='Email signature') return 'Best regards,\nThe Gifted Team';
       if(msg==='SMS body'){
         if(cum==='Yes') return s?'Hi ${recipientName}! Your ${brandName} gift card is ready. ${customText} Redeem: ${cardLink}':'Hi ${recipientName}! ${senderName} sent you a ${brandName} gift card. ${customText} Redeem: ${cardLink}';
         return s?'Hi ${recipientName}! Your ${brandName} gift card is ready. Redeem: ${cardLink}':'Hi ${recipientName}! ${senderName} sent you a ${brandName} gift card. Redeem: ${cardLink}';
@@ -307,6 +285,7 @@ RULES:
     const btnP=d=>({backgroundColor:d?'#ccc':'#1976d2',color:d?'#888':'white',padding:'9px 22px',borderRadius:'4px',fontSize:'14px',fontWeight:'500',border:'none',cursor:d?'not-allowed':'pointer'});
     const btnS={backgroundColor:'white',color:'#444',padding:'9px 22px',borderRadius:'4px',fontSize:'14px',fontWeight:'500',border:'1px solid #d0d0d0',cursor:'pointer'};
     const btnG=d=>({backgroundColor:d?'#ccc':'#4caf50',color:d?'#888':'white',padding:'9px 22px',borderRadius:'4px',fontSize:'14px',fontWeight:'500',border:'none',cursor:d?'not-allowed':'pointer'});
+    
     /* ═══════════════════════════════════════════════════════════════════════════
        GUIDANCE COMPONENTS
        ═══════════════════════════════════════════════════════════════════════════ */
@@ -349,10 +328,10 @@ RULES:
                 <div style={{background:'#e8f5e9',padding:'15px',borderRadius:'6px',border:'1px solid #4caf50'}}>
                   <div style={{fontWeight:'600',color:'#2e7d32',marginBottom:'8px',fontSize:'15px'}}>🌍 Global Templates</div>
                   <div style={{fontSize:'13px',color:'#555',lineHeight:'1.6'}}>
-                    Default templates that apply to <strong>all configurations</strong>. Changes propagate automatically to every sales configuration.
+                    Default templates that apply to <strong>all configurations</strong>. Stored at root level in S3.
                   </div>
                   <div style={{marginTop:'10px',fontSize:'12px',color:'#666',background:'white',padding:'8px',borderRadius:'4px'}}>
-                    <strong>Backend:</strong> Atomic write to all UUID folders simultaneously
+                    <strong>Backend:</strong> s3://bucket/global/ folder only
                   </div>
                 </div>
                 <div style={{background:'#e3f2fd',padding:'15px',borderRadius:'6px',border:'1px solid #1976d2'}}>
@@ -361,14 +340,14 @@ RULES:
                     Custom templates for individual configurations. <strong>Override</strong> global templates when customization is needed.
                   </div>
                   <div style={{marginTop:'10px',fontSize:'12px',color:'#666',background:'white',padding:'8px',borderRadius:'4px'}}>
-                    <strong>Backend:</strong> Writes to single UUID folder only
+                    <strong>Backend:</strong> s3://bucket/[UUID]/ folders
                   </div>
                 </div>
               </div>
               <div style={{background:'#f0f7ff',padding:'12px',borderRadius:'6px',border:'1px solid #667eea'}}>
                 <strong style={{color:'#667eea'}}>💡 Template Fallback Logic:</strong>
                 <div style={{fontSize:'13px',color:'#555',marginTop:'6px'}}>
-                  Config-specific → Global (same locale) → Global English (copied as starting point)
+                  Config-specific (UUID folder) → Global (global/ folder) → Global English (copied as starting point)
                 </div>
               </div>
             </div>
@@ -876,22 +855,6 @@ RULES:
     };
 
     /* ═══════════════════════════════════════════════════════════════════════════
-       FILE UPLOAD
-       ═══════════════════════════════════════════════════════════════════════════ */
-    const FileUpload = ({ id, selFile, onFile, uploadErr }) => (
-      <div>
-        <div style={{border:'2px dashed #d0d0d0',borderRadius:'8px',padding:'40px',textAlign:'center',backgroundColor:'#fafafa'}}>
-          <div style={{fontSize:'40px',marginBottom:'10px'}}>📁</div>
-          <p style={{fontSize:'13px',color:'#666',marginBottom:'14px',margin:'0 0 14px'}}>JPEG, PNG · 210×297mm · Max 5MB</p>
-          <input type="file" accept="image/jpeg,image/png" onChange={onFile} style={{display:'none'}} id={id}/>
-          <label htmlFor={id} style={{backgroundColor:'#1976d2',color:'white',padding:'9px 22px',borderRadius:'4px',fontSize:'14px',fontWeight:'500',cursor:'pointer',display:'inline-block'}}>Choose File</label>
-          {selFile && <div style={{marginTop:'12px',fontSize:'13px',color:'#4caf50'}}>✓ {selFile.name}</div>}
-        </div>
-        {uploadErr && <div style={{marginTop:'10px',padding:'10px 12px',backgroundColor:'#ffebee',border:'1px solid #f44336',borderRadius:'4px',fontSize:'13px',color:'#c62828'}}>{uploadErr}</div>}
-      </div>
-    );
-
-    /* ═══════════════════════════════════════════════════════════════════════════
        EDITOR PANEL
        ═══════════════════════════════════════════════════════════════════════════ */
     const EditorPanel = ({ isGlobal, buy, msg, mode, cum, placeholders, locale, defaultLocale, store, onStoreUpdate, onCancel }) => {
@@ -902,21 +865,18 @@ RULES:
       const phsKey = isGlobal ? '__g_savedPHs__'+defaultKey : '__savedPHs__'+defaultKey;
       const changeKey = isGlobal ? '__g_phsChanged__' : '__phsChanged__';
 
-      const init = store[realKey] ?? (isFirstPage(msg)?'':buildDefault(buy,msg,cum==='-'?'':cum));
+      const init = store[realKey] ?? buildDefault(buy,msg,cum==='-'?'':cum);
       const [content,setContent]=useState(init);
       const [lastSaved,setLastSaved]=useState(init);
       const savedDefaultPHs = useRef(
         store[phsKey] ? JSON.parse(store[phsKey]) : extractPlaceholders(store[defaultKey] || buildDefault(buy,msg,cum==='-'?'':cum))
       );
       const [showTranslateModal,setShowTranslateModal]=useState(false);
-      const [selFile,setSelFile]=useState(null);
-      const [uploadErr,setUploadErr]=useState('');
       const [errors,setErrors]=useState([]);
       const [warnings,setWarnings]=useState([]);
       const [saving,setSaving]=useState(false);
       const [saveStatus,setSaveStatus]=useState('');
       const [saveMsg,setSaveMsg]=useState('');
-      const [showHint,setShowHint]=useState(true);
       const targetLocales = ALL_LOCALES.filter(l=>l!==defLoc);
 
       const handleChange = v => {
@@ -942,11 +902,7 @@ RULES:
       };
 
       const handleSave = async () => {
-        if(isFirstPage(msg)){
-          if(!selFile){setUploadErr('Please upload an image before saving.');return;}
-        } else {
-          if(!validate()) return;
-        }
+        if(!validate()) return;
         
         setSaving(true);
         setSaveStatus('');
@@ -1008,35 +964,6 @@ RULES:
 
       return (
         <div style={{backgroundColor:'white',borderRadius:'8px',border:'1px solid #e0e0e0',padding:'22px'}}>
-          {showHint && isDefault && !isGlobal && (
-            <SmartHint 
-              type="backend" 
-              message="Default Language Editor - AI Translation Available"
-              details="You're editing the default language for this configuration. Changes here will be used as the source for AI translation to all other locales. Backend: Saves to CUSTOM folder in this UUID only. Fallback chain: Config-specific CUSTOM → Global DEFAULT → Global English (copied as starting point)."
-            />
-          )}
-          {showHint && !isDefault && !isGlobal && (
-            <SmartHint 
-              type="info" 
-              message="Non-Default Language - Placeholder Bar Hidden"
-              details={`This is not the default language (${defLoc}). Placeholder insertion is disabled here to maintain consistency. Use the Re-Translate button to regenerate from ${defLoc}, or edit manually ensuring all ${defLoc} placeholders remain present.`}
-            />
-          )}
-          {showHint && isGlobal && locale === GLOBAL_DEFAULT_LOCALE && (
-            <SmartHint 
-              type="backend" 
-              message="Global English Template - Always Exists"
-              details="Backend: English global templates always exist. When you save, this template is written to the DEFAULT folder in ALL UUID folders simultaneously. If any UUID write fails, the entire operation rolls back. This template serves as the source for creating non-English global templates."
-            />
-          )}
-          {showHint && isGlobal && locale !== GLOBAL_DEFAULT_LOCALE && (
-            <SmartHint 
-              type="backend" 
-              message="Global Non-English Template - Created from English"
-              details="Backend: Non-English global templates are created by duplicating from English. When you save, this template is written to the DEFAULT folder in ALL UUID folders simultaneously. If any UUID write fails, the entire operation rolls back. Placeholder validation shows warnings but doesn't block save to avoid circular dependency."
-            />
-          )}
-          
           <div style={{display:'flex',alignItems:'center',gap:'10px',marginBottom:'4px'}}>
             <h3 style={{fontSize:'15px',fontWeight:'500',color:'#2a303d',margin:0}}>Message editor</h3>
             {isDefault && <span style={{fontSize:'11px',fontWeight:'600',backgroundColor:'#e8f5e9',color:'#2e7d32',padding:'2px 8px',borderRadius:'10px',border:'1px solid #a5d6a7'}}>Default language</span>}
@@ -1050,32 +977,13 @@ RULES:
             }
           </div>}
 
-          {isFirstPage(msg)
-            ? <>
-                {showHint && (
-                  <SmartHint 
-                    type="info" 
-                    message="First Page Upload - Image stored separately"
-                    details="PDF/Postcard first pages are stored in a separate PDF service S3 bucket (not the templates bucket). Backend references these by configuration UUID and locale. Same fallback logic applies: config-specific → global → English."
-                  />
-                )}
-                <FileUpload id={isGlobal?'gu-file':'cu-file'} selFile={selFile} uploadErr={uploadErr} onFile={e=>{
-                  const f=e.target.files[0];
-                  setUploadErr('');
-                  if(!f)return;
-                  if(!['image/jpeg','image/png'].includes(f.type)){setUploadErr('Invalid file format. Please upload a JPEG or PNG image.');return;}
-                  if(f.size>5*1024*1024){setUploadErr('File exceeds 5MB.');return;}
-                  setSelFile(f);
-                }}/>
-              </>
-            : <RichEditor 
-                value={content} 
-                onChange={handleChange} 
-                placeholders={placeholders}
-                showImageOption={msg==='Email body'||msg==='Email signature'}
-                showPlaceholderBar={isGlobal || isDefault}
-                extraToolbar={translateBtn}/>
-          }
+          <RichEditor 
+            value={content} 
+            onChange={handleChange} 
+            placeholders={placeholders}
+            showImageOption={msg==='Email body'}
+            showPlaceholderBar={isGlobal || isDefault}
+            extraToolbar={translateBtn}/>
           
           {(errors.length>0||warnings.length>0)&&<div style={{marginTop:'12px'}}>
             {errors.map((e,i)=><div key={i} style={{padding:'10px 12px',backgroundColor:'#ffebee',border:'1px solid #f44336',borderRadius:'4px',marginBottom:'6px',fontSize:'13px',color:'#c62828'}}>{e}</div>)}
@@ -1088,11 +996,6 @@ RULES:
             <button onClick={handleSave} disabled={saveDisabled} style={btnG(saveDisabled)}>
               {saving?'SAVING...':'SAVE'}
             </button>
-            <button onClick={()=>{
-              setContent(lastSaved);
-              onStoreUpdate(realKey,lastSaved);
-              setErrors([]);setWarnings([]);setSaveStatus('');setSaveMsg('');
-            }} style={btnS}>RESET</button>
             <button onClick={()=>{setSaveStatus('');setSaveMsg('');onCancel();}} style={btnS}>CANCEL</button>
           </div>
 
@@ -1117,7 +1020,7 @@ RULES:
       const [cum,setCum]=useState('');
       const [locale,setLocale]=useState('');
       const [showEditor,setShowEditor]=useState(false);
-      const [showCriteriaHint,setShowCriteriaHint]=useState(true);
+      const [folderName,setFolderName]=useState('');
       const store=useRef({});
       const [,forceRender]=useState(0);
 
@@ -1166,6 +1069,32 @@ RULES:
       const handleSearch=()=>{
         const realKey = makeKey(buy,dm,dv,msg,resolvedCum,locale);
         
+        // Generate folder name based on criteria
+        const buyingUpper = buy.toUpperCase();
+        const modeUpper = dm.toUpperCase();
+        const customOrDefault = resolvedCum === 'Yes' ? 'CUSTOM' : 'DEFAULT';
+        const deliverableMap = {
+          'DIGITAL_PDF': 'PDF',
+          'EXCEL': 'EXCEL',
+          'PLAIN_TEXT': 'PLAIN_TEXT'
+        };
+        const deliverableUpper = deliverableMap[dv] || dv;
+        const elementMap = {
+          'Email subject': 'SUBJECT',
+          'Email body': 'DELIVERY',
+          'SMS body': 'DELIVERY'
+        };
+        const elementUpper = elementMap[msg] || msg.toUpperCase().replace(/ /g, '_');
+        const formatMap = {
+          'Email subject': 'TXT',
+          'Email body': 'HTML',
+          'SMS body': 'TXT'
+        };
+        const format = formatMap[msg] || 'HTML';
+        
+        const generatedFolderName = `${buyingUpper}_${modeUpper}_${customOrDefault}_${deliverableUpper}_${elementUpper}_${format}`;
+        setFolderName(generatedFolderName);
+        
         if (!isGlobal && !templateExists && configData) {
           configData.customTemplates[templateKey] = true;
         }
@@ -1174,17 +1103,14 @@ RULES:
         if (isGlobalNonEnglish && !globalNonEnglishExists) {
           const englishKey = makeKey(buy,dm,dv,msg,resolvedCum,GLOBAL_DEFAULT_LOCALE);
           const englishContent = store.current[englishKey] || buildDefault(buy,msg,resolvedCum==='-'?'':resolvedCum);
-          if (!isFirstPage(msg)) {
-            store.current[realKey] = englishContent;
-          }
+          store.current[realKey] = englishContent;
         }
         
-        if(!store.current[realKey] && !isFirstPage(msg)) {
+        if(!store.current[realKey]) {
           store.current[realKey] = buildDefault(buy,msg,resolvedCum==='-'?'':resolvedCum);
         }
         
         setShowEditor(true);
-        setShowCriteriaHint(false);
         forceRender(n=>n+1);
       };
 
@@ -1192,14 +1118,6 @@ RULES:
         <div style={{display:'flex',flexDirection:'column',gap:'18px'}}>
           <div style={{backgroundColor:'white',borderRadius:'8px',border:'1px solid #e0e0e0',padding:'22px'}}>
             <h3 style={{fontSize:'15px',fontWeight:'500',color:'#2a303d',marginBottom:'18px',marginTop:0}}>Select Template Criteria</h3>
-            
-            {showCriteriaHint && buy==='Gifting' && (
-              <SmartHint 
-                type="success" 
-                message="Postcard delivery mode is now available!"
-                details="You selected 'Gifting' as the buying option. The Postcard delivery mode is only available for Gifting (not Self-purchase), as recipients receive physical postcards with gift card details."
-              />
-            )}
 
             <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'14px',marginBottom:'18px'}}>
               <Sel label="Buying options"  value={buy} onChange={v=>{setBuy(v);resetBelow(1);}} options={getAvailableBuyingOptions()} disabled={disabled}/>
@@ -1220,29 +1138,10 @@ RULES:
               <Sel label="Locale" value={locale} onChange={v=>{setLocale(v);setShowEditor(false);}} options={localeUnlocked?ALL_LOCALES:[]} disabled={disabled||!localeUnlocked}/>
             </div>
 
-            {allChosen && !showEditor && (
-              <SmartHint 
-                type={
-                  isGlobalEnglish ? "backend" :
-                  (isGlobalNonEnglish && !globalNonEnglishExists) ? "backend" :
-                  (isGlobalNonEnglish && globalNonEnglishExists) ? "info" :
-                  templateExists ? "info" : "backend"
-                }
-                message={
-                  isGlobalEnglish ? "English global template always exists - Click SEARCH to load it" :
-                  (isGlobalNonEnglish && !globalNonEnglishExists) ? "No global template exists for this locale - Click CREATE TEMPLATE" :
-                  (isGlobalNonEnglish && globalNonEnglishExists) ? "Global template exists for this locale - Click SEARCH to load it" :
-                  templateExists ? "Template exists - Click SEARCH to load it" : "No custom template exists - Click CREATE TEMPLATE"
-                }
-                details={
-                  isGlobalEnglish ? "Backend: English global templates are always available and serve as the base for all configurations. When you save, this template is written to the DEFAULT folder in ALL UUID folders simultaneously." :
-                  (isGlobalNonEnglish && !globalNonEnglishExists) ? `Backend: This ${locale} global template will be created by duplicating from English. After creation, it will be written to the DEFAULT folder in ALL UUID folders simultaneously when saved.` :
-                  (isGlobalNonEnglish && globalNonEnglishExists) ? `Backend: This ${locale} global template already exists. It will be loaded from the DEFAULT folder. Changes will be written to ALL UUID folders simultaneously when saved.` :
-                  templateExists 
-                    ? "Backend: Reads from CUSTOM folder for this UUID. If not found, falls back to DEFAULT folder (global), then to English as starting point."
-                    : "Backend: Will create a new CUSTOM folder entry for this UUID. The global template (DEFAULT folder) will be loaded as your starting point. After you save, subsequent searches will show SEARCH instead of CREATE TEMPLATE."
-                }
-              />
+            {folderName && !isGlobal && (
+              <div style={{marginBottom:'14px',padding:'10px 12px',backgroundColor:'#f3e5f5',border:'1px solid #7b1fa2',borderRadius:'4px',fontSize:'13px'}}>
+                <strong style={{color:'#7b1fa2'}}>S3 Folder Name:</strong> <code style={{fontSize:'12px',background:'white',padding:'2px 6px',borderRadius:'3px',color:'#4a148c'}}>{folderName}</code>
+              </div>
             )}
 
             <div style={{display:'flex',gap:'10px',alignItems:'center'}}>
@@ -1250,7 +1149,7 @@ RULES:
                 {buttonText}
               </button>
               <button onClick={()=>{
-                setBuy('');setDm('');setDv('');setMsg('');setCum('');setLocale('');setShowEditor(false);store.current={};setShowCriteriaHint(true);
+                setBuy('');setDm('');setDv('');setMsg('');setCum('');setLocale('');setShowEditor(false);store.current={};setFolderName('');
               }} style={btnS}>RESET</button>
             </div>
           </div>
@@ -1339,7 +1238,7 @@ RULES:
                   <SmartHint 
                     type="backend" 
                     message="Configuration loaded - Default locale determined"
-                    details={`Backend validated this UUID and returned default locale: ${defaultLocale}. Available delivery modes and deliverables are filtered based on what this configuration supports. Templates will be stored in s3://[bucket]/${ref.trim()}/CUSTOM/[folder-name]/.`}
+                    details={`Backend validated this UUID and returned default locale: ${defaultLocale}. Available delivery modes and deliverables are filtered based on what this configuration supports. Templates will be stored in s3://[bucket]/${ref.trim()}/[BUYING]_[MODE]_[CUSTOM|DEFAULT]_[DELIVERABLE]_[ELEMENT]_[FORMAT]/.`}
                   />
                 </>
               )}
@@ -1363,7 +1262,6 @@ RULES:
     function App() {
       const [tab,setTab]=useState('global');
       const [showWelcome,setShowWelcome]=useState(true);
-      const [showHelp,setShowHelp]=useState(false);
       const [copiedUUID, setCopiedUUID] = useState(null);
 
       const handleUUIDCopy = (uuid) => {
@@ -1424,7 +1322,7 @@ RULES:
                   <SmartHint 
                     type="info" 
                     message="Global Templates - Default Fallback for All Configurations"
-                    details="Global templates are the default fallback used when a configuration doesn't have a custom template. Changes here affect ALL sales configurations simultaneously unless overridden by config-specific templates. English is always the default language for global templates and always exists. Non-English global templates can be created by duplicating from English."
+                    details="Global templates are stored at s3://bucket/global/ and serve as the default fallback when configurations don't have custom templates. Changes here are written to the global folder only (no propagation to UUID folders). English is always the default language for global templates. Non-English global templates can be created by duplicating from English."
                   />
                   <CriteriaForm isGlobal={true} disabled={false} defaultLocale="English" configData={null} key="global"/>
                 </>
